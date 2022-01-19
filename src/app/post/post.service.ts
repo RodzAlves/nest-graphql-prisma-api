@@ -1,26 +1,78 @@
 import { Injectable } from '@nestjs/common';
-import { CreatePostInput } from './dto/create-post.input';
-import { UpdatePostInput } from './dto/update-post.input';
-
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Post } from 'src/@generated/prisma-nestjs-graphql/post/post.model';
+import { PostCreateInput } from 'src/@generated/prisma-nestjs-graphql/post/post-create.input';
+import { PostUpdateInput } from 'src/@generated/prisma-nestjs-graphql/post/post-update.input';
+import { ApolloError } from 'apollo-server-express';
 @Injectable()
 export class PostService {
-  create(createPostInput: CreatePostInput) {
-    return 'This action adds a new post';
+  constructor(private prismaService: PrismaService) {}
+
+  async create(data: PostCreateInput): Promise<Post> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: data.author.connect.id },
+    });
+
+    if (!user) {
+      throw new ApolloError(`Author not found`);
+    }
+
+    return await this.prismaService.post.create({
+      data,
+      include: {
+        author: true,
+      },
+    });
   }
 
-  findAll() {
-    return `This action returns all post`;
+  async findAll(): Promise<Post[]> {
+    return await this.prismaService.post.findMany({
+      include: {
+        author: true,
+      },
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} post`;
+  async findOne(id: string): Promise<Post | null> {
+    const post = await this.prismaService.post.findUnique({
+      where: { id },
+      include: {
+        author: true,
+      },
+    });
+
+    if (!post) {
+      throw new ApolloError(`Post cannot find by id.`);
+    }
+
+    return post;
   }
 
-  update(id: number, updatePostInput: UpdatePostInput) {
-    return `This action updates a #${id} post`;
+  async update(id: string, data: PostUpdateInput): Promise<Post> {
+    const post = await this.prismaService.post.findUnique({ where: { id } });
+
+    if (!post) {
+      throw new ApolloError(`Post cannot find by id ${id}`);
+    }
+
+    return await this.prismaService.post.update({
+      where: { id },
+      data,
+      include: {
+        author: true,
+      },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} post`;
+  async delete(id: string): Promise<Post | null> {
+    const post = await this.prismaService.post.findUnique({ where: { id } });
+
+    if (!post) {
+      throw new ApolloError(`Record cannot find by id ${id}`);
+    }
+
+    return await this.prismaService.post.delete({
+      where: { id },
+    });
   }
 }

@@ -1,35 +1,68 @@
-import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { PostService } from './post.service';
-import { Post } from './entities/post.entity';
-import { CreatePostInput } from './dto/create-post.input';
-import { UpdatePostInput } from './dto/update-post.input';
+import { PostUpdateInput } from 'src/@generated/prisma-nestjs-graphql/post/post-update.input';
+import { PostCreateInput } from 'src/@generated/prisma-nestjs-graphql/post/post-create.input';
+import { Post } from 'src/@generated/prisma-nestjs-graphql/post/post.model';
+import { isRecordNotFoundError } from 'src/utils/Prisma';
+import { ApolloError } from 'apollo-server-express';
 
 @Resolver(() => Post)
 export class PostResolver {
   constructor(private readonly postService: PostService) {}
 
-  @Mutation(() => Post)
-  createPost(@Args('createPostInput') createPostInput: CreatePostInput) {
-    return this.postService.create(createPostInput);
+  @Mutation(() => Post, { name: 'createPost' })
+  async createPost(@Args('createPostInput') createPostInput: PostCreateInput) {
+    try {
+      return await this.postService.create(createPostInput);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new ApolloError(
+          `No resource was found for ${JSON.stringify(createPostInput)}`,
+        );
+      }
+
+      throw error;
+    }
   }
 
-  @Query(() => [Post], { name: 'post' })
+  @Query(() => [Post], { name: 'posts' })
   findAll() {
-    return this.postService.findAll();
+    try {
+      return this.postService.findAll();
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new ApolloError(`No resource was found`);
+      }
+
+      throw error;
+    }
   }
 
   @Query(() => Post, { name: 'post' })
-  findOne(@Args('id', { type: () => Int }) id: number) {
-    return this.postService.findOne(id);
+  async findOne(@Args('id', { type: () => String }) id: string) {
+    return await this.postService.findOne(id);
   }
 
-  @Mutation(() => Post)
-  updatePost(@Args('updatePostInput') updatePostInput: UpdatePostInput) {
-    return this.postService.update(updatePostInput.id, updatePostInput);
+  @Mutation(() => Post, { name: 'updatePost' })
+  async updatePost(
+    @Args('id') id: string,
+    @Args('updatePostInput') updatePostInput: PostUpdateInput,
+  ) {
+    try {
+      return await this.postService.update(id, updatePostInput);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new ApolloError(
+          `No resource was found for ID: ${JSON.stringify(id)}`,
+        );
+      }
+
+      throw error;
+    }
   }
 
-  @Mutation(() => Post)
-  removePost(@Args('id', { type: () => Int }) id: number) {
-    return this.postService.remove(id);
+  @Mutation(() => Post, { name: 'deletePost' })
+  async deletePost(@Args('id', { type: () => String }) id: string) {
+    return await this.postService.delete(id);
   }
 }
